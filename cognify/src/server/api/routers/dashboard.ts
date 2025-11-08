@@ -44,7 +44,7 @@ export const dashboardRouter = createTRPCRouter({
     > = {};
 
     items.forEach((item) => {
-      const category = item.category || "Uncategorized";
+      const category = item.categoryPath || "Other";
 
       if (!knowledgeByCategory[category]) {
         knowledgeByCategory[category] = {

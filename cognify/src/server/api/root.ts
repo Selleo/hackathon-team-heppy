@@ -1,5 +1,5 @@
 import { authRouter } from "@/server/api/routers/auth";
-import { conversationRouter } from "@/server/api/routers/conversation";
+import { chatRouter } from "@/server/api/routers/chat";
 import { knowledgeRouter } from "@/server/api/routers/knowledge";
 import { dashboardRouter } from "@/server/api/routers/dashboard";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
@@ -7,11 +7,11 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 /**
  * This is the primary router for your server.
  *
- * All routers added in /api/routers should be manually added here.
+ * All routers added in /api/routers/should be manually added here.
  */
 export const appRouter = createTRPCRouter({
   auth: authRouter,
-  conversation: conversationRouter,
+  chat: chatRouter,
   knowledge: knowledgeRouter,
   dashboard: dashboardRouter,
 });

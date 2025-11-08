@@ -51,16 +51,15 @@ async function findSimilarKnowledgeItem(
 export function createUpdateKnowledgeItemTool(
   db: DB,
   userId: string,
-  conversationId: string,
 ) {
   return tool({
     description:
-      "Create or update a knowledge item to track user learning. Use this whenever the user mentions knowing or not knowing something.",
+      "Create or update a knowledge item to track user learning. Use this whenever the user mentions knowing or not knowing something. IMPORTANT: Intelligently categorize items into hierarchical paths.",
     inputSchema: z.object({
       title: z
         .string()
         .describe(
-          "The name of the concept or skill (e.g., 'JavaScript Closures', 'React Hooks')",
+          "The name of the concept or skill (e.g., 'Django', 'React Hooks', 'Docker')",
         ),
       description: z
         .string()
@@ -71,14 +70,14 @@ export function createUpdateKnowledgeItemTool(
         .describe(
           "Latent = user claims to know it (unverified), Identified Gap = user doesn't know it, Learning = actively studying, Mastered = verified proficiency",
         ),
-      category: z
+      categoryPath: z
         .string()
         .optional()
         .describe(
-          "Topic category like 'JavaScript', 'Python', 'Web Development', etc.",
+          "Hierarchical category path using ' > ' separator. Examples: 'Web Development > Backend Frameworks', 'Programming Languages > JavaScript', 'DevOps > Containerization'. Group related items intelligently. Use 'Other' if uncertain.",
         ),
     }),
-    execute: async ({ title, description, status, category }) => {
+    execute: async ({ title, description, status, categoryPath }) => {
       try {
         // Check for similar existing items using fuzzy matching
         const existing = await findSimilarKnowledgeItem(
@@ -94,7 +93,7 @@ export function createUpdateKnowledgeItemTool(
             .set({
               status: status,
               description: description || existing.title,
-              category: category,
+              categoryPath: categoryPath,
               lastReviewedAt: new Date(),
               updatedAt: new Date(),
             })
@@ -110,6 +109,7 @@ export function createUpdateKnowledgeItemTool(
             id: updated!.id,
             title: updated!.title,
             status: updated!.status,
+            categoryPath: updated!.categoryPath,
             action: "updated" as const,
           };
         } else {
@@ -121,8 +121,7 @@ export function createUpdateKnowledgeItemTool(
               title: title,
               description: description,
               status: status,
-              category: category,
-              sourceConversationId: conversationId,
+              categoryPath: categoryPath,
             })
             .returning();
 
@@ -130,6 +129,7 @@ export function createUpdateKnowledgeItemTool(
             id: newItem!.id,
             title: newItem!.title,
             status: newItem!.status,
+            categoryPath: newItem!.categoryPath,
             action: "created" as const,
           };
         }

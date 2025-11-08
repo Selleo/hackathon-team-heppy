@@ -37,12 +37,12 @@ export default function DashboardPage() {
   const filteredKnowledge = allKnowledge?.filter((item) => {
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-    const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
+    const matchesCategory = categoryFilter === "all" || item.categoryPath === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
   // Get unique categories
-  const categories = Array.from(new Set(allKnowledge?.map((item) => item.category).filter(Boolean)));
+  const categories = Array.from(new Set(allKnowledge?.map((item) => item.categoryPath).filter(Boolean)));
 
   if (summaryLoading || knowledgeLoading) {
     return (
@@ -208,9 +208,9 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {item.category && (
+                      {item.categoryPath && (
                         <Badge variant="outline" className="text-xs">
-                          {item.category}
+                          {item.categoryPath}
                         </Badge>
                       )}
                       <Badge className={statusColors[item.status]}>

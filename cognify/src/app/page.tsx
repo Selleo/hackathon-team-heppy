@@ -32,13 +32,13 @@ export default async function Home() {
                 <Link href="/chat">
                   <Button size="lg" className="gap-2">
                     <MessageSquare className="h-5 w-5" />
-                    Start Learning
+                    Start Chat
                   </Button>
                 </Link>
                 <Link href="/dashboard">
                   <Button size="lg" variant="outline" className="gap-2">
                     <BarChart3 className="h-5 w-5" />
-                    View Atlas
+                    View Dashboard
                   </Button>
                 </Link>
               </div>

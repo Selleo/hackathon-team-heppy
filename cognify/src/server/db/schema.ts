@@ -90,9 +90,9 @@ export const verification = pgTable("verification", {
 // Cognify Tables
 // ===================================
 
-// Conversations table
-export const conversations = pgTable(
-  "conversation",
+// Messages table - Single chat per user
+export const messages = pgTable(
+  "message",
   {
     id: text("id")
       .primaryKey()
@@ -100,30 +100,6 @@ export const conversations = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => ({
-    userIdIdx: index("conversation_user_id_idx").on(table.userId),
-    updatedAtIdx: index("conversation_updated_at_idx").on(table.updatedAt),
-  }),
-);
-
-// Messages table
-export const messages = pgTable(
-  "message",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => createId()),
-    conversationId: text("conversation_id")
-      .notNull()
-      .references(() => conversations.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
     authorType: authorTypeEnum("author_type").notNull(),
     timestamp: timestamp("timestamp", { withTimezone: true })
@@ -132,14 +108,12 @@ export const messages = pgTable(
     metadata: jsonb("metadata"), // Stores tool calls and other AI metadata
   },
   (table) => ({
-    conversationIdIdx: index("message_conversation_id_idx").on(
-      table.conversationId,
-    ),
+    userIdIdx: index("message_user_id_idx").on(table.userId),
     timestampIdx: index("message_timestamp_idx").on(table.timestamp),
   }),
 );
 
-// Knowledge Items table
+// Knowledge Items table with hierarchical categories
 export const knowledgeItems = pgTable(
   "knowledge_item",
   {
@@ -152,7 +126,8 @@ export const knowledgeItems = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     status: knowledgeStatusEnum("status").notNull(),
-    category: text("category"),
+    // Hierarchical category path: "Web Development > Backend Frameworks"
+    categoryPath: text("category_path"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -160,10 +135,6 @@ export const knowledgeItems = pgTable(
       .notNull()
       .defaultNow(),
     lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
-    sourceConversationId: text("source_conversation_id").references(
-      () => conversations.id,
-      { onDelete: "set null" },
-    ),
   },
   (table) => ({
     userIdIdx: index("knowledge_item_user_id_idx").on(table.userId),
@@ -173,7 +144,7 @@ export const knowledgeItems = pgTable(
     ),
     userIdCategoryIdx: index("knowledge_item_user_id_category_idx").on(
       table.userId,
-      table.category,
+      table.categoryPath,
     ),
     titleIdx: index("knowledge_item_title_idx").on(table.title),
     userIdTitleUnique: uniqueIndex("knowledge_item_user_id_title_unique").on(
@@ -190,7 +161,7 @@ export const knowledgeItems = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   account: many(account),
   session: many(session),
-  conversations: many(conversations),
+  messages: many(messages),
   knowledgeItems: many(knowledgeItems),
 }));
 
@@ -202,22 +173,10 @@ export const sessionRelations = relations(session, ({ one }) => ({
   user: one(user, { fields: [session.userId], references: [user.id] }),
 }));
 
-export const conversationsRelations = relations(
-  conversations,
-  ({ one, many }) => ({
-    user: one(user, {
-      fields: [conversations.userId],
-      references: [user.id],
-    }),
-    messages: many(messages),
-    knowledgeItems: many(knowledgeItems),
-  }),
-);
-
 export const messagesRelations = relations(messages, ({ one }) => ({
-  conversation: one(conversations, {
-    fields: [messages.conversationId],
-    references: [conversations.id],
+  user: one(user, {
+    fields: [messages.userId],
+    references: [user.id],
   }),
 }));
 
@@ -227,10 +186,6 @@ export const knowledgeItemsRelations = relations(
     user: one(user, {
       fields: [knowledgeItems.userId],
       references: [user.id],
-    }),
-    sourceConversation: one(conversations, {
-      fields: [knowledgeItems.sourceConversationId],
-      references: [conversations.id],
     }),
   }),
 );

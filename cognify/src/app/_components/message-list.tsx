@@ -65,7 +65,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
   }
 
   return (
-    <ScrollArea className="flex-1">
+    <div className="flex-1 overflow-y-auto">
       <div className="space-y-4 p-4">
         {messages.map((message) => (
           <div
@@ -115,7 +115,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
         ))}
         <div ref={scrollRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 

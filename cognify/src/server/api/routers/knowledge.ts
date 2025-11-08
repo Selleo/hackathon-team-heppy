@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 import {
   createTRPCRouter,
   protectedProcedure,
 } from "@/server/api/trpc";
-import { knowledgeItems, conversations } from "@/server/db/schema";
+import { knowledgeItems } from "@/server/db/schema";
 
 export const knowledgeRouter = createTRPCRouter({
   // Get all knowledge items with optional filtering
@@ -39,7 +39,7 @@ export const knowledgeRouter = createTRPCRouter({
       }
 
       if (input.category) {
-        conditions.push(eq(knowledgeItems.category, input.category));
+        conditions.push(eq(knowledgeItems.categoryPath, input.category));
       }
 
       // Get knowledge items
@@ -61,7 +61,7 @@ export const knowledgeRouter = createTRPCRouter({
         title: item.title,
         description: item.description,
         status: item.status,
-        category: item.category,
+        categoryPath: item.categoryPath,
         updatedAt: item.updatedAt,
       }));
     }),
@@ -81,9 +81,6 @@ export const knowledgeRouter = createTRPCRouter({
           eq(knowledgeItems.id, input.id),
           eq(knowledgeItems.userId, userId),
         ),
-        with: {
-          sourceConversation: true,
-        },
       });
 
       if (!item) {
@@ -95,16 +92,10 @@ export const knowledgeRouter = createTRPCRouter({
         title: item.title,
         description: item.description,
         status: item.status,
-        category: item.category,
+        categoryPath: item.categoryPath,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         lastReviewedAt: item.lastReviewedAt,
-        sourceConversation: item.sourceConversation
-          ? {
-              id: item.sourceConversation.id,
-              title: item.sourceConversation.title,
-            }
-          : null,
       };
     }),
 
