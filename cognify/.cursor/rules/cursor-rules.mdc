@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+- rememeber to use shadcn components if available, we have all of them in the components/ui
