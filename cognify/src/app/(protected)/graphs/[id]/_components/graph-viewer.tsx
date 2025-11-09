@@ -50,9 +50,20 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
   // Use ref instead of state to avoid re-renders on hover
   const hoveredNodeRef = useRef<string | null>(null);
   
-  // Use refs to track graph data and avoid re-renders
-  const graphDataRef = useRef({ nodes: [], links: [] });
-  const [, forceUpdate] = useState({});
+  // Use state like the reference example - this is the correct way
+  const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({
+    nodes: [{
+      id: "root",
+      name: graphName,
+      val: 3,
+      group: "root",
+      isRoot: true,
+    }],
+    links: []
+  });
+  
+  const addedNodesRef = useRef(new Set<string>(['root']));
+  const addedEdgesRef = useRef(new Set<string>());
 
   const { nodes, edges, status, statusMessage, error, summary } =
     useGraphStream(graphId);
@@ -89,53 +100,69 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       resizeObserver.disconnect();
     };
   }, []);
-
-
-  // Transform data for react-force-graph with root node
-  // Use useMemo to prevent unnecessary re-renders
-  const graphData = React.useMemo(() => {
-    // Create a root node based on graph name
-    const rootNode = {
-      id: "root",
-      name: graphName,
-      val: 3, // Larger size for root
-      group: "root",
-      isRoot: true,
-    };
+  
+  // Add nodes and edges incrementally - using functional setState like the reference example
+  useEffect(() => {
+    if (nodes.length === 0) return;
     
-    // Find nodes that have no incoming edges (potential floating roots)
+    // Check for new nodes
+    const newNodes = nodes.filter(n => !addedNodesRef.current.has(n.id));
+    
+    // Check for new edges
+    const newEdges = edges.filter(e => {
+      const edgeKey = `${e.source}-${e.target}`;
+      return !addedEdgesRef.current.has(edgeKey);
+    });
+    
+    // If nothing new, skip
+    if (newNodes.length === 0 && newEdges.length === 0) {
+      return;
+    }
+    
+    console.log('[GraphViewer] Adding', newNodes.length, 'nodes and', newEdges.length, 'edges');
+    
+    // Mark new nodes and edges as added
+    newNodes.forEach(n => addedNodesRef.current.add(n.id));
+    newEdges.forEach(e => addedEdgesRef.current.add(`${e.source}-${e.target}`));
+    
+    // Find floating nodes
     const nodesWithIncoming = new Set(edges.map(e => e.target));
-    const floatingNodes = nodes.filter(n => !nodesWithIncoming.has(n.id));
+    const floatingNodes = newNodes.filter(n => !nodesWithIncoming.has(n.id));
+    floatingNodes.forEach(node => addedEdgesRef.current.add(`root-${node.id}`));
     
-    // Create edges from root to floating nodes
-    const rootEdges = floatingNodes.map(node => ({
-      source: "root",
-      target: node.id,
-      label: "includes",
-      type: "root",
-    }));
-    
-    return {
-      nodes: [
-        rootNode,
-        ...nodes.map((node) => ({
-          id: node.id,
-          name: node.label,
-          val: node.weight || 1,
-          group: node.group,
-        })),
-      ],
-      links: [
-        ...rootEdges,
-        ...edges.map((edge) => ({
-          source: edge.source,
-          target: edge.target,
-          label: edge.relation,
-          type: edge.type,
-        })),
-      ],
-    };
-  }, [nodes, edges, graphName]);
+    // Use functional setState to create NEW arrays (not mutate existing)
+    setGraphData(({ nodes: prevNodes, links: prevLinks }) => {
+      // Transform new nodes
+      const transformedNewNodes = newNodes.map(node => ({
+        id: node.id,
+        name: node.label,
+        val: node.weight || 1,
+        group: node.group,
+      }));
+      
+      // Transform new edges
+      const transformedNewEdges = newEdges.map(edge => ({
+        source: edge.source,
+        target: edge.target,
+        label: edge.relation,
+        type: edge.type,
+      }));
+      
+      // Create root edges for floating nodes
+      const rootEdges = floatingNodes.map(node => ({
+        source: "root",
+        target: node.id,
+        label: "includes",
+        type: "root",
+      }));
+      
+      // Return NEW arrays
+      return {
+        nodes: [...prevNodes, ...transformedNewNodes],
+        links: [...prevLinks, ...transformedNewEdges, ...rootEdges]
+      };
+    });
+  }, [nodes, edges]);
 
   const handleZoomIn = () => {
     if (graphRef.current?.zoom) {
@@ -398,8 +425,8 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               enableZoomInteraction={true}
               enablePanInteraction={true}
               enableNodeDrag={false}
-              cooldownTime={15000}
-              cooldownTicks={50}
+              cooldownTime={2000}
+              cooldownTicks={100}
               onEngineStop={() => {
                 // Simple fit to view on initial load
                 if (initialCenter && graphRef.current?.zoomToFit) {
@@ -407,10 +434,10 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
                   setInitialCenter(false);
                 }
               }}
-              d3AlphaMin={0.001}
-              d3AlphaDecay={0.0228}
-              d3VelocityDecay={0.4}
-              warmupTicks={100}
+              d3AlphaMin={0.05}
+              d3AlphaDecay={0.02}
+              d3VelocityDecay={0.5}
+              warmupTicks={0}
               d3Force="charge"
               d3ForceStrength={forceStrength}
             />
