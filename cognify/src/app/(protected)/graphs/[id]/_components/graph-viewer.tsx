@@ -44,6 +44,7 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [showLabels, setShowLabels] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(false);
+  const [initialCenter, setInitialCenter] = useState(true);
   
   // Use ref instead of state to avoid re-renders on hover
   const hoveredNodeRef = useRef<string | null>(null);
@@ -116,6 +117,14 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
     }
   };
 
+  const handleNodeClick = useCallback((node: any) => {
+    // Center the clicked node
+    if (graphRef.current?.centerAt) {
+      graphRef.current.centerAt(node.x, node.y, 1000);
+      graphRef.current.zoom(4, 1000);
+    }
+  }, []);
+
   const getStatusColor = () => {
     switch (status) {
       case "complete":
@@ -134,50 +143,24 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const nodeData = node;
       const label = nodeData.name as string;
-      const fontSize = 12 / globalScale;
-      const nodeSize = 8;
       const isHovered = hoveredNodeRef.current === nodeData.id;
-
-      // Draw node circle
-      ctx.beginPath();
-      ctx.arc(nodeData.x ?? 0, nodeData.y ?? 0, nodeSize, 0, 2 * Math.PI);
-      ctx.fillStyle = (nodeData.color as string) ?? "#666";
-      ctx.fill();
-
-      // Add white border on hover
-      if (isHovered) {
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-        ctx.lineWidth = 2 / globalScale;
-        ctx.stroke();
-      }
-
-      // Only draw label if showLabels is true OR node is hovered
-      if (showLabels || isHovered) {
+      
+      // Determine if label should be shown based on zoom level or settings
+      const shouldShowLabel = showLabels || isHovered || globalScale >= 3.5;
+      
+      if (shouldShowLabel) {
+        // Calculate font size based on zoom
+        const fontSize = 14 / (globalScale * 1.2);
         ctx.font = `${fontSize}px Sans-Serif`;
-        const textWidth = ctx.measureText(label).width;
-        const bckgDimensions = [textWidth, fontSize].map(
-          (n) => n + fontSize * 0.2,
-        );
-
-        const labelX = nodeData.x ?? 0;
-        const labelY = (nodeData.y ?? 0) + nodeSize + fontSize * 0.8;
-
-        // Draw background rectangle
-        ctx.fillStyle = isHovered
-          ? "rgba(0, 0, 0, 0.85)"
-          : "rgba(0, 0, 0, 0.7)";
-        ctx.fillRect(
-          labelX - (bckgDimensions[0] ?? 0) / 2,
-          labelY - (bckgDimensions[1] ?? 0) / 2,
-          bckgDimensions[0] ?? 0,
-          bckgDimensions[1] ?? 0,
-        );
-
-        // Draw label text
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-        ctx.fillText(label, labelX, labelY);
+        
+        // Use black text for better visibility
+        ctx.fillStyle = isHovered ? "rgba(0, 0, 0, 0.95)" : "rgba(0, 0, 0, 0.85)";
+        
+        // Draw label below the node
+        const labelY = (nodeData.y ?? 0) + 2.5;
+        ctx.fillText(label, nodeData.x ?? 0, labelY);
       }
     },
     [showLabels],
@@ -208,7 +191,8 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       const label = linkData.label as string;
       if (!label) return;
 
-      const fontSize = 9 / globalScale;
+      // Calculate font size similar to node labels
+      const fontSize = 12 / (globalScale * 1.2);
       ctx.font = `${fontSize}px Sans-Serif`;
 
       // Calculate middle position
@@ -223,25 +207,10 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       const middleX = start.x + (end.x - start.x) / 2;
       const middleY = start.y + (end.y - start.y) / 2;
 
-      // Measure text
-      const textWidth = ctx.measureText(label).width;
-      const bckgDimensions = [textWidth, fontSize].map(
-        (n) => n + fontSize * 0.15,
-      );
-
-      // Draw background
-      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-      ctx.fillRect(
-        middleX - (bckgDimensions[0] ?? 0) / 2,
-        middleY - (bckgDimensions[1] ?? 0) / 2,
-        bckgDimensions[0] ?? 0,
-        bckgDimensions[1] ?? 0,
-      );
-
-      // Draw text
+      // Draw text without background for cleaner look
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(180, 180, 180, 0.95)";
+      ctx.fillStyle = "rgba(100, 100, 100, 0.9)"; // Darker gray for better visibility
       ctx.fillText(label, middleX, middleY);
     },
     [showEdgeLabels],
@@ -357,7 +326,9 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               height={dimensions.height}
               nodeLabel="name"
               nodeAutoColorBy="group"
-              nodeRelSize={8}
+              nodeRelSize={1}
+              onNodeClick={handleNodeClick}
+              nodeCanvasObjectMode={() => "after"}
               nodeCanvasObject={nodeCanvasObjectCallback}
               nodePointerAreaPaint={nodePointerAreaPaintCallback}
               onNodeHover={onNodeHoverCallback}
@@ -371,14 +342,15 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               linkCanvasObject={linkCanvasObjectCallback}
               enableZoomInteraction={true}
               enablePanInteraction={true}
-              enableNodeDrag={true}
+              enableNodeDrag={false}
               cooldownTime={15000}
-              cooldownTicks={100}
+              cooldownTicks={50}
               onEngineStop={() => {
-                // Keep simulation warm to prevent restarts
-                if (graphRef.current) {
-                  graphRef.current.d3ReheatSimulation?.();
+                // Fit to view on initial load
+                if (initialCenter && graphRef.current?.zoomToFit) {
+                  graphRef.current.zoomToFit(400, 50);
                 }
+                setInitialCenter(false);
               }}
               d3AlphaMin={0.001}
               d3AlphaDecay={0.0228}
