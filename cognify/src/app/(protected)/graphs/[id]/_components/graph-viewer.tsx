@@ -45,14 +45,25 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
   const [showLabels, setShowLabels] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(false);
   const [initialCenter, setInitialCenter] = useState(true);
+  const [currentZoom, setCurrentZoom] = useState(1);
   
   // Use ref instead of state to avoid re-renders on hover
   const hoveredNodeRef = useRef<string | null>(null);
+  
+  // Use refs to track graph data and avoid re-renders
+  const graphDataRef = useRef({ nodes: [], links: [] });
+  const [, forceUpdate] = useState({});
 
   const { nodes, edges, status, statusMessage, error, summary } =
     useGraphStream(graphId);
 
-  // Update dimensions based on container size
+  // Simplified force calculation with sensible defaults
+  const forceStrength = React.useMemo(() => {
+    // Stronger base repulsion for better spacing
+    return -300;
+  }, []);
+
+  // Update dimensions on mount and resize
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
@@ -79,35 +90,66 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
     };
   }, []);
 
-  // Transform data for react-force-graph
+
+  // Transform data for react-force-graph with root node
   // Use useMemo to prevent unnecessary re-renders
-  const graphData = React.useMemo(
-    () => ({
-      nodes: nodes.map((node) => ({
-        id: node.id,
-        name: node.label,
-        val: node.weight || 1,
-        group: node.group,
-      })),
-      links: edges.map((edge) => ({
-        source: edge.source,
-        target: edge.target,
-        label: edge.relation,
-        type: edge.type,
-      })),
-    }),
-    [nodes, edges],
-  );
+  const graphData = React.useMemo(() => {
+    // Create a root node based on graph name
+    const rootNode = {
+      id: "root",
+      name: graphName,
+      val: 3, // Larger size for root
+      group: "root",
+      isRoot: true,
+    };
+    
+    // Find nodes that have no incoming edges (potential floating roots)
+    const nodesWithIncoming = new Set(edges.map(e => e.target));
+    const floatingNodes = nodes.filter(n => !nodesWithIncoming.has(n.id));
+    
+    // Create edges from root to floating nodes
+    const rootEdges = floatingNodes.map(node => ({
+      source: "root",
+      target: node.id,
+      label: "includes",
+      type: "root",
+    }));
+    
+    return {
+      nodes: [
+        rootNode,
+        ...nodes.map((node) => ({
+          id: node.id,
+          name: node.label,
+          val: node.weight || 1,
+          group: node.group,
+        })),
+      ],
+      links: [
+        ...rootEdges,
+        ...edges.map((edge) => ({
+          source: edge.source,
+          target: edge.target,
+          label: edge.relation,
+          type: edge.type,
+        })),
+      ],
+    };
+  }, [nodes, edges, graphName]);
 
   const handleZoomIn = () => {
     if (graphRef.current?.zoom) {
-      graphRef.current.zoom(graphRef.current.zoom() * 1.2, 400);
+      const newZoom = graphRef.current.zoom() * 1.2;
+      graphRef.current.zoom(newZoom, 400);
+      setCurrentZoom(newZoom);
     }
   };
 
   const handleZoomOut = () => {
     if (graphRef.current?.zoom) {
-      graphRef.current.zoom(graphRef.current.zoom() / 1.2, 400);
+      const newZoom = graphRef.current.zoom() / 1.2;
+      graphRef.current.zoom(newZoom, 400);
+      setCurrentZoom(newZoom);
     }
   };
 
@@ -144,23 +186,33 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       const nodeData = node;
       const label = nodeData.name as string;
       const isHovered = hoveredNodeRef.current === nodeData.id;
+      const isRoot = nodeData.isRoot === true;
       
-      // Determine if label should be shown based on zoom level or settings
-      const shouldShowLabel = showLabels || isHovered || globalScale >= 3.5;
+      // Always show labels for root node, otherwise check conditions
+      const shouldShowLabel = showLabels || isHovered || globalScale >= 2.5;
       
       if (shouldShowLabel) {
-        // Calculate font size based on zoom
-        const fontSize = 14 / (globalScale * 1.2);
-        ctx.font = `${fontSize}px Sans-Serif`;
+        // Simplified font sizing
+        const baseFontSize = isRoot ? 14 : 9;
+        const fontSize = baseFontSize / Math.sqrt(globalScale);
+        
+        ctx.font = `${isRoot ? 'bold ' : ''}${fontSize}px Sans-Serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         
-        // Use black text for better visibility
-        ctx.fillStyle = isHovered ? "rgba(0, 0, 0, 0.95)" : "rgba(0, 0, 0, 0.85)";
+        // Root node gets special styling
+        if (isRoot) {
+          ctx.fillStyle = "rgba(0, 0, 0, 1)";
+        } else {
+          ctx.fillStyle = isHovered ? "rgba(0, 0, 0, 0.9)" : "rgba(0, 0, 0, 0.7)";
+        }
         
         // Draw label below the node
-        const labelY = (nodeData.y ?? 0) + 2.5;
+        const nodeSize = isRoot ? 10 : 5;
+        const labelY = (nodeData.y ?? 0) + nodeSize + fontSize * 0.3;
+        if (!isRoot) {
         ctx.fillText(label, nodeData.x ?? 0, labelY);
+        }
       }
     },
     [showLabels],
@@ -183,6 +235,12 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
     hoveredNodeRef.current = node ? (node.id as string) : null;
   }, []);
 
+  const onZoomCallback = useCallback((zoom: any) => {
+    if (typeof zoom === 'object' && zoom.k) {
+      setCurrentZoom(zoom.k);
+    }
+  }, []);
+
   const linkCanvasObjectCallback = useCallback(
     (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (!showEdgeLabels) return;
@@ -190,27 +248,23 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       const linkData = link;
       const label = linkData.label as string;
       if (!label) return;
+      
+      // Skip root connection labels
+      if (linkData.type === "root") return;
 
-      // Calculate font size similar to node labels
-      const fontSize = 12 / (globalScale * 1.2);
+      // Simplified font sizing
+      const fontSize = 5 / Math.sqrt(globalScale);
+      
       ctx.font = `${fontSize}px Sans-Serif`;
 
       // Calculate middle position
-      const start = {
-        x: linkData.source.x ?? 0,
-        y: linkData.source.y ?? 0,
-      };
-      const end = {
-        x: linkData.target.x ?? 0,
-        y: linkData.target.y ?? 0,
-      };
-      const middleX = start.x + (end.x - start.x) / 2;
-      const middleY = start.y + (end.y - start.y) / 2;
+      const middleX = linkData.source.x + (linkData.target.x - linkData.source.x) / 2;
+      const middleY = linkData.source.y + (linkData.target.y - linkData.source.y) / 2;
 
-      // Draw text without background for cleaner look
+      // Draw text
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(100, 100, 100, 0.9)"; // Darker gray for better visibility
+      ctx.fillStyle = "rgba(100, 100, 100, 0.7)";
       ctx.fillText(label, middleX, middleY);
     },
     [showEdgeLabels],
@@ -332,12 +386,13 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               nodeCanvasObject={nodeCanvasObjectCallback}
               nodePointerAreaPaint={nodePointerAreaPaintCallback}
               onNodeHover={onNodeHoverCallback}
+              onZoom={onZoomCallback}
               linkLabel="label"
               linkDirectionalArrowLength={4}
               linkDirectionalArrowRelPos={1}
               linkCurvature={0.15}
-              linkColor={() => "rgba(150, 150, 150, 0.3)"}
-              linkWidth={1}
+              linkColor={(link) => link.type === "root" ? "rgba(200, 200, 200, 0.2)" : "rgba(150, 150, 150, 0.3)"}
+              linkWidth={(link) => link.type === "root" ? 0.5 : 1}
               linkCanvasObjectMode={() => (showEdgeLabels ? "after" : undefined)}
               linkCanvasObject={linkCanvasObjectCallback}
               enableZoomInteraction={true}
@@ -346,18 +401,18 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               cooldownTime={15000}
               cooldownTicks={50}
               onEngineStop={() => {
-                // Fit to view on initial load
+                // Simple fit to view on initial load
                 if (initialCenter && graphRef.current?.zoomToFit) {
-                  graphRef.current.zoomToFit(400, 50);
+                  graphRef.current.zoomToFit(400, 80);
+                  setInitialCenter(false);
                 }
-                setInitialCenter(false);
               }}
               d3AlphaMin={0.001}
               d3AlphaDecay={0.0228}
               d3VelocityDecay={0.4}
               warmupTicks={100}
               d3Force="charge"
-              d3ForceStrength={-120}
+              d3ForceStrength={forceStrength}
             />
           </div>
         )}
