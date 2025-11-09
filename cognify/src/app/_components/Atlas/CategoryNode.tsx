@@ -9,11 +9,13 @@ import { statusIcons } from "@/lib/constants/gapStatusIcons";
 export function CategoryNode({ 
   name, 
   data, 
-  level = 0 
+  level = 0,
+  onItemClick,
 }: { 
   name: string; 
   data: any; 
   level?: number;
+  onItemClick?: (item: KnowledgeItem) => void;
 }) {
   const [isOpen, setIsOpen] = useState(level === 0); // Top level open by default
   const hasChildren = Object.keys(data.children).length > 0;
@@ -41,13 +43,14 @@ export function CategoryNode({
           <div className="ml-4 space-y-1 border-l pl-2">
             {/* Direct items in this category */}
             {data.items.map((item: KnowledgeItem) => (
-              <div
+              <button
                 key={item.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                onClick={() => onItemClick?.(item)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50 cursor-pointer"
               >
                 <span className="shrink-0 text-base">{statusIcons[item.status]}</span>
-                <span className="flex-1 truncate">{item.title}</span>
-              </div>
+                <span className="flex-1 truncate text-left">{item.title}</span>
+              </button>
             ))}
             
             {/* Subcategories */}
@@ -57,6 +60,7 @@ export function CategoryNode({
                 name={childName}
                 data={childData}
                 level={level + 1}
+                onItemClick={onItemClick}
               />
             ))}
           </div>

@@ -9,15 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/trpc/react";
 import { StatusLegenedCard } from './StatusLegenedCard';
 import { CategoryNode } from './CategoryNode';
+import { KnowledgeDrawer } from './KnowledgeDrawer';
 import type { KnowledgeItem } from '@/types/atlas';
-
-const statusColors = {
-  Mastered: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
-  Learning: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
-  "Identified Gap": "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
-  Latent: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20",
-};
-
 
 // Build hierarchical tree structure from flat list
 function buildCategoryTree(items: KnowledgeItem[]) {
@@ -51,8 +44,15 @@ function buildCategoryTree(items: KnowledgeItem[]) {
 
 export function KnowledgePanel() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: allKnowledge, isLoading } = api.knowledge.list.useQuery({});
+
+  const handleItemClick = (item: KnowledgeItem) => {
+    setSelectedItem(item);
+    setDrawerOpen(true);
+  };
 
   // Filter knowledge items
   const filteredKnowledge = allKnowledge?.filter((item) =>
@@ -107,6 +107,7 @@ export function KnowledgePanel() {
                       key={categoryName}
                       name={categoryName}
                       data={categoryData}
+                      onItemClick={handleItemClick}
                     />
                   ))}
                 </div>
@@ -125,6 +126,12 @@ export function KnowledgePanel() {
           <StatusLegenedCard />
         </div>
       </ScrollArea>
+
+      <KnowledgeDrawer 
+        item={selectedItem}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
     </div>
   );
 }
