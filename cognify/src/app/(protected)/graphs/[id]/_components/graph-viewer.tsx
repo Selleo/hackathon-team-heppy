@@ -23,6 +23,7 @@ import {
 import type { ForceGraphMethods } from "react-force-graph-2d";
 import { useNodeSelection } from "@/hooks/useNodeSelection";
 import { NodeDetailsSheet } from "./node-details-sheet";
+import { useSidebar } from "@/components/ui/sidebar";
 
 // Dynamically import ForceGraph2D with no SSR
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
@@ -45,13 +46,16 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphEdge> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [showLabels, setShowLabels] = useState(false);
-  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [initialCenter, setInitialCenter] = useState(true);
-  const [currentZoom, setCurrentZoom] = useState(1);
   
-  // Use ref instead of state to avoid re-renders on hover
+  // Use sidebar state to track when it toggles
+  const { state: sidebarState } = useSidebar();
+  
+  // Use refs to avoid re-renders
   const hoveredNodeRef = useRef<string | null>(null);
+  const currentZoomRef = useRef<number>(1);
   
   // Use state like the reference example - this is the correct way
   const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({
@@ -92,28 +96,35 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
+        // Calculate width based on window width minus sidebar width
+        // Sidebar: 16rem (256px) expanded, 3rem (48px) collapsed
+        const sidebarWidth = sidebarState === "expanded" ? 360 : 48;
+        const headerHeight = 16 * 4; // h-14 = 56px (header in layout)
+        const graphHeaderHeight = containerRef.current.offsetTop; // Height of graph's own headers
+        
+        const width = window.innerWidth - sidebarWidth;
+        const height = window.innerHeight - graphHeaderHeight - headerHeight;
+        
         setDimensions({
-          width: rect.width,
-          height: rect.height,
+          width,
+          height,
         });
       }
     };
 
+    // Update immediately
     updateDimensions();
-    window.addEventListener("resize", updateDimensions);
     
-    // Use ResizeObserver to handle sidebar collapse/expand
-    const resizeObserver = new ResizeObserver(updateDimensions);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
+    // Also update after sidebar transition completes (200ms + buffer)
+    const timeoutId = setTimeout(updateDimensions, 300);
+    
+    window.addEventListener("resize", updateDimensions);
 
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener("resize", updateDimensions);
-      resizeObserver.disconnect();
     };
-  }, []);
+  }, [sidebarState]);
   
   // Add nodes and edges incrementally - using functional setState like the reference example
   useEffect(() => {
@@ -182,7 +193,7 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
     if (graphRef.current?.zoom) {
       const newZoom = graphRef.current.zoom() * 1.2;
       graphRef.current.zoom(newZoom, 400);
-      setCurrentZoom(newZoom);
+      currentZoomRef.current = newZoom;
     }
   };
 
@@ -190,7 +201,7 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
     if (graphRef.current?.zoom) {
       const newZoom = graphRef.current.zoom() / 1.2;
       graphRef.current.zoom(newZoom, 400);
-      setCurrentZoom(newZoom);
+      currentZoomRef.current = newZoom;
     }
   };
 
@@ -299,7 +310,7 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
 
   const onZoomCallback = useCallback((zoom: any) => {
     if (typeof zoom === 'object' && zoom.k) {
-      setCurrentZoom(zoom.k);
+      currentZoomRef.current = zoom.k;
     }
   }, []);
 
@@ -333,7 +344,7 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
   );
 
   return (
-    <div className="bg-background flex flex-col w-full h-full">
+    <div className="bg-background flex flex-col w-full h-full overflow-hidden">
       {/* Header */}
       <div className="bg-card border-b">
         <div className="flex items-center justify-between px-4 py-4">
@@ -433,7 +444,7 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
             </div>
           </div>
         ) : (
-          <div className="h-full w-full">
+          <div className="h-full w-full overflow-hidden">
             <ForceGraph2D
               // @ts-expect-error - ForceGraph2D ref type mismatch
               ref={graphRef}
