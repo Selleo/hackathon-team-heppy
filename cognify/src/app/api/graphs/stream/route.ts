@@ -70,13 +70,62 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 3. Update graph status to building
+    // 3. Check if graph is already complete
+    if (graph.status === "complete" && graph.graphJson) {
+      console.log(
+        `[Stream] Graph ${graphId} already complete, returning cached data`,
+      );
+      // Return cached graph data immediately without streaming
+      const graphData = graph.graphJson as {
+        nodes: GraphNode[];
+        edges: GraphEdge[];
+      };
+
+      const stream = new ReadableStream({
+        start(controller) {
+          // Send status
+          sendEvent(controller, "status", {
+            message: "Loading cached graph...",
+          });
+
+          // Send all nodes
+          for (const node of graphData.nodes) {
+            sendEvent(controller, "node", { node });
+          }
+
+          // Send all edges
+          for (const edge of graphData.edges) {
+            sendEvent(controller, "edge", { edge });
+          }
+
+          // Send complete event
+          sendEvent(controller, "complete", {
+            summary: {
+              nodes: graphData.nodes.length,
+              edges: graphData.edges.length,
+            },
+          });
+
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // 4. Update graph status to building (only if not already complete)
     await db
       .update(graphs)
       .set({ status: "building" })
       .where(eq(graphs.id, graphId));
 
-    // 4. Create SSE stream
+    // 5. Create SSE stream for building the graph
     const stream = new ReadableStream({
       async start(controller) {
         // Maps to accumulate nodes and edges for final save
