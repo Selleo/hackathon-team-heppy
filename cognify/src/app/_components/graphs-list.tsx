@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, FileText, Lightbulb, Clock, Trash2 } from "lucide-react";
+import { Loader2, Clock, Trash2 } from "lucide-react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 
@@ -83,11 +83,7 @@ export function GraphsList() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-2">
-                      {graph.sourceType === "topic" ? (
-                        <Lightbulb className="text-muted-foreground h-4 w-4" />
-                      ) : (
-                        <FileText className="text-muted-foreground h-4 w-4" />
-                      )}
+                      <span className="text-lg">{graph.icon}</span>
                       <h3 className="leading-none font-medium">{graph.name}</h3>
                     </div>
 

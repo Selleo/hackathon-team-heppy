@@ -24,6 +24,7 @@ export default async function GraphPage({ params }: PageProps) {
     .select({
       id: graphs.id,
       name: graphs.name,
+      icon: graphs.icon,
       status: graphs.status,
       userId: graphs.userId,
       createdAt: graphs.createdAt,
@@ -44,6 +45,7 @@ export default async function GraphPage({ params }: PageProps) {
   return (
     <GraphViewer
       graphId={graph.id}
+      graphIcon={graph.icon}
       graphName={graph.name}
       initialStatus={graph.status}
     />

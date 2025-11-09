@@ -1,8 +1,6 @@
 "use client"
 
 import {
-  FileText,
-  Lightbulb,
   MoreHorizontal,
   Trash2,
   Loader2,
@@ -27,12 +25,12 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export type Graph = {
   id: string
   name: string
+  icon: string
   sourceType: "topic" | "upload"
   status: "pending" | "building" | "complete" | "error"
   createdAt: Date
@@ -88,11 +86,7 @@ export function NavFavorites({
             <SidebarMenuItem key={graph.id}>
               <SidebarMenuButton asChild className="pr-8">
                 <a href={`/graphs/${graph.id}`} title={graph.name}>
-                  {graph.sourceType === "topic" ? (
-                    <Lightbulb className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <FileText className="h-4 w-4 shrink-0" />
-                  )}
+                  <span className="text-base shrink-0">{graph.icon}</span>
                   <span className="min-w-0 flex-1 truncate">{graph.name}</span>
                 </a>
               </SidebarMenuButton>

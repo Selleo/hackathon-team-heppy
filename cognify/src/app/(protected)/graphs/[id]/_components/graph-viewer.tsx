@@ -34,11 +34,12 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
 
 interface GraphViewerProps {
   graphId: string;
+  graphIcon: string;
   graphName: string;
   initialStatus?: string; // Made optional since we don't use it
 }
 
-export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
+export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps) {
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphEdge> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -309,7 +310,7 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold">{graphName}</h1>
+              <h1 className="text-2xl font-bold">{graphIcon} {graphName}</h1>
               <p className="text-muted-foreground text-sm">
                 {nodes.length} nodes · {edges.length} edges
               </p>

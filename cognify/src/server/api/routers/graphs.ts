@@ -12,6 +12,7 @@ export const graphsRouter = createTRPCRouter({
       .select({
         id: graphs.id,
         name: graphs.name,
+        icon: graphs.icon,
         sourceType: graphs.sourceType,
         status: graphs.status,
         createdAt: graphs.createdAt,
