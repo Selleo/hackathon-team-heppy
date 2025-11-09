@@ -15,6 +15,20 @@
       "when": 1762650676766,
       "tag": "0001_add_graphs_table",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762683971877,
+      "tag": "0002_sour_titania",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762684180879,
+      "tag": "0003_brainy_micromax",
+      "breakpoints": true
     }
   ]
 }

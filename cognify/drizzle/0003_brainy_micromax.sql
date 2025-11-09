@@ -1,0 +1,1 @@
+ALTER TABLE "pg-drizzle_graph" DROP COLUMN "icon";

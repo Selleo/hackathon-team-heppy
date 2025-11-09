@@ -136,10 +136,11 @@ export async function POST(request: NextRequest) {
       .values({
         userId,
         name: graphName,
+
         sourceType,
         inputMeta,
         inputText: sourceText,
-        status: "pending",
+        status: "pending", 
       })
       .returning({ id: graphs.id });
 

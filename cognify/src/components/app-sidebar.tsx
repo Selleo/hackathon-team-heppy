@@ -1,0 +1,32 @@
+"use client"
+
+import * as React from "react"
+import Link from "next/link"
+import { Brain } from "lucide-react"
+import { NavFavorites } from "@/components/nav-favorites"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarRail,
+} from "@/components/ui/sidebar"
+import { api } from '@/trpc/react';
+
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: graphs, isLoading } = api.graphs.list.useQuery();
+  
+  return (
+    <Sidebar className="border-r-0" {...props}>
+      <SidebarHeader>
+        <Link href="/" className="flex items-center gap-2 px-2 py-3 font-semibold">
+          <Brain className="h-5 w-5" />
+          <span>Cognify</span>
+        </Link>
+      </SidebarHeader>
+      <SidebarContent>
+        <NavFavorites graphs={graphs ?? []} isLoading={isLoading} />
+      </SidebarContent>
+      <SidebarRail />
+    </Sidebar>
+  )
+}
