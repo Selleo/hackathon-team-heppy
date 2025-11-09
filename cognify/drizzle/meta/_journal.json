@@ -29,6 +29,13 @@
       "when": 1762684180879,
       "tag": "0003_brainy_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762684883918,
+      "tag": "0004_curious_magus",
+      "breakpoints": true
     }
   ]
 }

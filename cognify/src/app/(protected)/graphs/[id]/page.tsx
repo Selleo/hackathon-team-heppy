@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/server/better-auth/server";
 import { db } from "@/server/db";
 import { graphs } from "@/server/db/schema";
@@ -14,6 +14,10 @@ interface PageProps {
 export default async function GraphPage({ params }: PageProps) {
   const { id } = await params;
   const session = await getSession();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
 
   // Fetch graph metadata
   const [graph] = await db

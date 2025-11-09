@@ -40,23 +40,37 @@ interface GraphViewerProps {
 
 export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphEdge> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   const { nodes, edges, status, statusMessage, error, summary } =
     useGraphStream(graphId);
 
-  // Update dimensions on mount and resize
+  // Update dimensions based on container size
   useEffect(() => {
     const updateDimensions = () => {
-      setDimensions({
-        width: window.innerWidth - 64, // Account for padding
-        height: window.innerHeight - 200, // Account for header
-      });
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDimensions({
+          width: rect.width,
+          height: rect.height,
+        });
+      }
     };
 
     updateDimensions();
     window.addEventListener("resize", updateDimensions);
-    return () => window.removeEventListener("resize", updateDimensions);
+    
+    // Use ResizeObserver to handle sidebar collapse/expand
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateDimensions);
+      resizeObserver.disconnect();
+    };
   }, []);
 
   // Transform data for react-force-graph
@@ -107,10 +121,10 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
   };
 
   return (
-    <div className="bg-background flex h-screen flex-col">
+    <div className="bg-background flex flex-col w-full h-full">
       {/* Header */}
       <div className="bg-card border-b">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <div className="flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/">
               <Button variant="ghost" size="icon">
@@ -140,7 +154,7 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
 
       {/* Controls */}
       <div className="bg-card border-b">
-        <div className="container mx-auto px-4 py-2">
+        <div className="px-4 py-2">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleZoomIn}>
               <ZoomIn className="h-4 w-4" />
@@ -166,7 +180,7 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       </div>
 
       {/* Graph Canvas */}
-      <div className="flex-1 overflow-hidden">
+      <div ref={containerRef} className="flex-1 overflow-hidden min-h-0">
         {error ? (
           <div className="flex h-full items-center justify-center">
             <Card className="max-w-md">
@@ -247,7 +261,7 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
       {/* Summary */}
       {summary && status === "complete" && (
         <div className="bg-card border-t">
-          <div className="container mx-auto px-4 py-3">
+          <div className="px-4 py-3">
             <p className="text-muted-foreground text-center text-sm">
               Graph complete: {summary.nodes} nodes, {summary.edges} edges
             </p>

@@ -1,0 +1,1 @@
+ALTER TABLE "pg-drizzle_graph" ADD COLUMN "icon" text NOT NULL;

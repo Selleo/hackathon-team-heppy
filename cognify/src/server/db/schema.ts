@@ -128,6 +128,7 @@ export const graphs = createTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: d.text().notNull(),
+    icon: d.text().notNull(), // Emoji icon
     sourceType: sourceTypeEnum("source_type").notNull(),
     inputMeta: d.jsonb("input_meta"),
     inputText: d.text("input_text").notNull(),

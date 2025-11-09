@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { db } from "@/server/db";
 import { graphs } from "@/server/db/schema";
 import { auth } from "@/server/better-auth";
@@ -30,6 +31,13 @@ const createGraphSchema = z
       message: "Must provide either 'topic' or 'inputText', but not both",
     },
   );
+
+// AI response schema for topic generation
+const TopicGenerationResponse = z.object({
+  content: z.string().describe("Comprehensive educational content about the topic"),
+  title: z.string().describe("Short, descriptive title (2-4 words)"),
+  emoji: z.string().describe("Single relevant emoji character"),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,32 +82,50 @@ export async function POST(request: NextRequest) {
     // 4. Determine source text and metadata
     let sourceText: string;
     let graphName: string;
+    let graphIcon: string;
     let sourceType: "topic" | "upload";
     let inputMeta: Record<string, unknown> | null = null;
 
     if (topic) {
-      // Generate text from topic using OpenAI
+      // Generate text, title, and emoji from topic in one AI call
       try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
+            {
+              role: "system",
+              content: "You are an educational content generator. Generate comprehensive educational content about the given topic, along with a short title and relevant emoji.",
+            },
             {
               role: "user",
               content: getTopicGenerationPrompt(topic),
             },
           ],
           temperature: 0.7,
-          max_tokens: 2000,
+          max_tokens: 2100,
+          response_format: zodResponseFormat(TopicGenerationResponse, "topic_generation"),
         });
 
-        sourceText = completion.choices[0]?.message?.content ?? "";
-
-        if (!sourceText || sourceText.trim().length === 0) {
+        const messageContent = completion.choices[0]?.message?.content;
+        if (!messageContent) {
           return NextResponse.json(
             { error: "Failed to generate text from topic" },
             { status: 500 },
           );
         }
+
+        const response = TopicGenerationResponse.parse(JSON.parse(messageContent));
+
+        if (!response.content || response.content.trim().length === 0) {
+          return NextResponse.json(
+            { error: "Failed to generate text from topic" },
+            { status: 500 },
+          );
+        }
+
+        sourceText = response.content;
+        graphName = name ?? response.title ?? topic;
+        graphIcon = response.emoji ?? "📊";
       } catch (error) {
         console.error("OpenAI generation error:", error);
         return NextResponse.json(
@@ -108,7 +134,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      graphName = name ?? topic;
       sourceType = "topic";
       inputMeta = { topic };
     } else if (inputText) {
@@ -122,7 +147,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      graphName = name ?? `Graph ${new Date().toISOString().slice(0, 10)}`;
+      // Use custom name or default for uploaded text
+      graphName = name ?? `Knowledge Graph ${new Date().toISOString().slice(0, 10)}`;
+      graphIcon = "📄";
+
       sourceType = "upload";
       inputMeta = { length: sourceText.length };
     } else {
@@ -136,11 +164,11 @@ export async function POST(request: NextRequest) {
       .values({
         userId,
         name: graphName,
-
+        icon: graphIcon,
         sourceType,
         inputMeta,
         inputText: sourceText,
-        status: "pending", 
+        status: "pending",
       })
       .returning({ id: graphs.id });
 
