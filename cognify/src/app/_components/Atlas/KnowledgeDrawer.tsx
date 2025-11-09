@@ -50,7 +50,7 @@ export function KnowledgeDrawer({ item, open, onOpenChange }: KnowledgeDrawerPro
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent className="h-screen w-full sm:max-w-4xl">
+      <DrawerContent className="h-screen !w-full sm:!max-w-2xl lg:!max-w-3xl">
         <ScrollArea className="h-full">
           <DrawerHeader className="border-b">
             <div className="flex items-center gap-2">
