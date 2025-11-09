@@ -1,4 +1,4 @@
-import { CreateGraphForm } from "@/app/_components/create-graph-form";
+import { CreateGraphPrompt } from "@/app/_components/create-graph-prompt";
 
 export default async function Home() {
   return (
@@ -11,7 +11,7 @@ export default async function Home() {
           </p>
         </div>
 
-        <CreateGraphForm />
+        <CreateGraphPrompt />
       </div>
     </div>
   );
