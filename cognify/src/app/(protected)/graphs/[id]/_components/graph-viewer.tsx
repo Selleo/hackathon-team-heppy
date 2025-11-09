@@ -418,7 +418,7 @@ export function GraphViewer({ graphId, graphName }: GraphViewerProps) {
               linkDirectionalArrowLength={4}
               linkDirectionalArrowRelPos={1}
               linkCurvature={0.15}
-              linkColor={(link) => link.type === "root" ? "rgba(200, 200, 200, 0.2)" : "rgba(150, 150, 150, 0.3)"}
+              linkColor={(link) => link.type === "root" ? "rgba(180, 180, 180, 0.3)" : "rgba(150, 150, 150, 0.3)"}
               linkWidth={(link) => link.type === "root" ? 0.5 : 1}
               linkCanvasObjectMode={() => (showEdgeLabels ? "after" : undefined)}
               linkCanvasObject={linkCanvasObjectCallback}
