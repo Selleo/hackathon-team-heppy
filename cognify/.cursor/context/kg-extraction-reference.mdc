@@ -1,0 +1,601 @@
+---
+description: Language-agnostic patterns from the Python ai-knowledge-graph implementation
+alwaysApply: false
+---
+
+# Knowledge Graph Extraction Reference
+
+_Language-agnostic patterns from the Python ai-knowledge-graph implementation_
+
+## 2. LLM Prompts for Triple Extraction
+
+### System Prompt
+
+```
+You are an advanced AI system specialized in knowledge extraction and knowledge graph generation.
+Your expertise includes identifying consistent entity references and meaningful relationships in text.
+CRITICAL INSTRUCTION: All relationships (predicates) MUST be no more than 3 words maximum. Ideally 1-2 words. This is a hard limit.
+```
+
+### User Prompt Template
+
+````
+Your task: Read the text below (delimited by triple backticks) and identify all Subject-Predicate-Object (S-P-O) relationships in each sentence. Then produce a single JSON array of objects, each representing one triple.
+
+Follow these rules carefully:
+
+- Entity Consistency: Use consistent names for entities throughout the document. For example, if "John Smith" is mentioned as "John", "Mr. Smith", and "John Smith" in different places, use a single consistent form (preferably the most complete one) in all triples.
+- Atomic Terms: Identify distinct key terms (e.g., objects, locations, organizations, acronyms, people, conditions, concepts, feelings). Avoid merging multiple ideas into one term (they should be as "atomistic" as possible).
+- Unified References: Replace any pronouns (e.g., "he," "she," "it," "they," etc.) with the actual referenced entity, if identifiable.
+- Pairwise Relationships: If multiple terms co-occur in the same sentence (or a short paragraph that makes them contextually related), create one triple for each pair that has a meaningful relationship.
+- CRITICAL INSTRUCTION: Predicates MUST be 1-3 words maximum. Never more than 3 words. Keep them extremely concise.
+- Ensure that all possible relationships are identified in the text and are captured in an S-P-O relation.
+- Standardize terminology: If the same concept appears with slight variations (e.g., "artificial intelligence" and "AI"), use the most common or canonical form consistently.
+- Make all the text of S-P-O text lower-case, even Names of people and places.
+- If a person is mentioned by name, create a relation to their location, profession and what they are known for (invented, wrote, started, title, etc.) if known and if it fits the context of the information.
+
+Important Considerations:
+- Aim for precision in entity naming - use specific forms that distinguish between similar but different entities
+- Maximize connectedness by using identical entity names for the same concepts throughout the document
+- Consider the entire context when identifying entity references
+- ALL PREDICATES MUST BE 3 WORDS OR FEWER - this is a hard requirement
+
+Output Requirements:
+
+- Do not include any text or commentary outside of the JSON.
+- Return only the JSON array, with each triple as an object containing "subject", "predicate", and "object".
+- Make sure the JSON is valid and properly formatted.
+
+Example of the desired output structure:
+
+[
+  {
+    "subject": "Term A",
+    "predicate": "relates to",  // Notice: only 2 words
+    "object": "Term B"
+  },
+  {
+    "subject": "Term C",
+    "predicate": "uses",  // Notice: only 1 word
+    "object": "Term D"
+  }
+]
+
+Important: Only output the JSON array (with the S-P-O objects) and nothing else
+
+Text to analyze (between triple backticks):
+```{input_text}```
+````
+
+**Key Extraction Rules:**
+
+1. **3-word predicate limit** (hard requirement)
+2. Lowercase everything
+3. Replace pronouns with actual entities
+4. Use consistent entity names
+5. Create pairwise relationships for co-occurring terms
+6. Return ONLY valid JSON array
+
+---
+
+## 3. JSON Extraction from LLM Response
+
+### Robust JSON Parsing Algorithm
+
+````
+function extract_json_from_text(text):
+  // Step 1: Check for code blocks with triple backticks
+  if text contains "```json" or "```":
+    extract content between ``` markers
+    text = extracted_content
+
+  // Step 2: Try direct JSON parse
+  try:
+    return parse_json(text)
+  catch:
+    // Step 3: Find JSON array boundaries
+    start_idx = text.indexOf('[')
+    if start_idx == -1:
+      return null
+
+    // Step 4: Count brackets to find matching ']'
+    bracket_count = 0
+    for i from start_idx to end of text:
+      if text[i] == '[': bracket_count++
+      if text[i] == ']': bracket_count--
+      if bracket_count == 0:
+        json_str = text[start_idx:i+1]
+        try:
+          return parse_json(json_str)
+        catch:
+          // Step 5: Fix common issues
+          fixed = fix_missing_quotes(json_str)
+          fixed = remove_trailing_commas(fixed)
+          return parse_json(fixed)
+
+    // Step 6: If incomplete, extract complete objects
+    complete_objects = extract_complete_objects_between_braces(text)
+    if complete_objects.length > 0:
+      reconstructed = "[" + join(complete_objects, ",") + "]"
+      return parse_json(reconstructed)
+
+  return null
+````
+
+**Handles:**
+
+- Code block wrapping
+- Partial JSON responses
+- Missing quotes around keys
+- Trailing commas
+- Incomplete arrays
+
+---
+
+## 4. Entity Standardization Algorithm
+
+### Phase 1: Basic Normalization
+
+```
+function normalize_entity(text):
+  text = lowercase(text)
+  stopwords = ["the", "a", "an", "of", "and", "or", "in", "on", "at", "to", "for", "with", "by", "as"]
+  words = extract_words(text)
+  filtered = filter_out(words, stopwords)
+  return join(filtered, " ")
+```
+
+### Phase 2: Group Similar Entities
+
+```
+function standardize_entities(triples):
+  all_entities = extract_all_entities(triples)
+  entity_groups = {}
+
+  // Group by normalized form
+  for entity in all_entities:
+    normalized = normalize_entity(entity)
+    entity_groups[normalized].append(entity)
+
+  // Choose standard form for each group
+  standardized = {}
+  for group_key, variants in entity_groups:
+    if len(variants) == 1:
+      standardized[variants[0]] = variants[0]
+    else:
+      // Pick most frequent variant
+      counts = count_occurrences(variants, triples)
+      standard = max(variants, by=counts)
+      for variant in variants:
+        standardized[variant] = standard
+
+  return standardized
+```
+
+### Phase 3: Root Word Relationships
+
+```
+function find_subset_relationships(entities):
+  additional_mapping = {}
+  sorted_entities = sort(entities, by=length)
+
+  for i, entity1 in sorted_entities:
+    words1 = set(entity1.split())
+
+    for entity2 in sorted_entities[i+1:]:
+      words2 = set(entity2.split())
+
+      // Check if one is subset of other
+      if words1.issubset(words2):
+        additional_mapping[entity2] = entity1  // Use shorter form
+      else if words2.issubset(words1):
+        additional_mapping[entity1] = entity2
+      else:
+        // Check for shared stems (first 4 chars of words > 4 chars)
+        stems1 = {word[0:4] for word in words1 if len(word) > 4}
+        stems2 = {word[0:4] for word in words2 if len(word) > 4}
+        shared = stems1.intersection(stems2)
+
+        if shared AND len(shared) / max(len(stems1), len(stems2)) > 0.5:
+          // Use shorter entity as standard
+          if len(entity1) <= len(entity2):
+            additional_mapping[entity2] = entity1
+          else:
+            additional_mapping[entity1] = entity2
+
+  return additional_mapping
+```
+
+**Key Points:**
+
+- Normalize entities (lowercase, remove stopwords)
+- Group identical normalized forms
+- Pick most frequent variant as standard
+- Detect subset relationships (e.g., "AI" ⊂ "AI system")
+- Use stem matching for related words
+
+---
+
+## 5. Predicate Length Enforcement
+
+```
+function limit_predicate_length(predicate, max_words=3):
+  words = predicate.split()
+
+  if len(words) <= max_words:
+    return predicate
+
+  // Take first max_words
+  shortened = join(words[0:max_words])
+
+  // Remove trailing stopwords
+  stopwords = {'a', 'an', 'the', 'of', 'with', 'by', 'to', 'from', 'in', 'on', 'for'}
+  last_word = shortened.split()[-1].lowercase()
+
+  if last_word in stopwords AND len(words) > 1:
+    shortened = join(shortened.split()[0:-1])
+
+  return shortened
+```
+
+**Apply to:**
+
+- All extracted predicates immediately after LLM response
+- All inferred predicates before adding to graph
+
+---
+
+## 6. Relationship Inference
+
+### 6.1 Transitive Inference (Rule-Based)
+
+```
+function apply_transitive_inference(triples):
+  graph = build_adjacency_map(triples)  // {subject: [objects]}
+  predicates = build_predicate_map(triples)  // {(subj, obj): predicate}
+  new_triples = []
+
+  for A in graph:
+    for B in graph[A]:
+      for C in graph[B]:
+        if A != C AND (A, C) not in predicates:
+          // Found A→B→C, infer A→C
+          pred_AB = predicates[(A, B)]
+          pred_BC = predicates[(B, C)]
+
+          if pred_AB == pred_BC:
+            new_pred = "indirectly " + pred_AB
+          else:
+            new_pred = pred_AB + " via " + B
+
+          new_triples.append({
+            subject: A,
+            predicate: limit_predicate_length(new_pred),
+            object: C,
+            type: "inferred"
+          })
+
+  return new_triples
+```
+
+### 6.2 Lexical Similarity Inference
+
+```
+function infer_by_lexical_similarity(entities, existing_triples):
+  existing_pairs = extract_connected_pairs(existing_triples)
+  new_triples = []
+
+  for entity1 in entities:
+    for entity2 in entities:
+      if entity1 == entity2: continue
+      if (entity1, entity2) in existing_pairs: continue
+
+      words1 = set(entity1.lowercase().split())
+      words2 = set(entity2.lowercase().split())
+      shared = words1.intersection(words2)
+
+      if shared:
+        // Find longest shared word
+        main_shared = max(shared, by=length)
+
+        if len(main_shared) >= 4:
+          // Infer relationship based on shared root
+          new_triples.append({
+            subject: entity1,
+            predicate: "related to",
+            object: entity2,
+            type: "inferred"
+          })
+      else if entity1 in entity2:
+        new_triples.append({
+          subject: entity2,
+          predicate: "is type of",
+          object: entity1,
+          type: "inferred"
+        })
+      else if entity2 in entity1:
+        new_triples.append({
+          subject: entity1,
+          predicate: "is type of",
+          object: entity2,
+          type: "inferred"
+        })
+
+  return new_triples
+```
+
+**Inference Types:**
+
+1. **Transitive** (A→B, B→C ⇒ A→C)
+2. **Lexical similarity** (shared words/stems)
+3. **Containment** (one entity contains another)
+
+**Guardrails:**
+
+- Cap inferred edges at 1.5× extracted edges
+- Always mark with `type: "inferred"`
+- Skip if extracted relationship already exists
+- Never create self-references (A→A)
+
+---
+
+## 7. Community Detection
+
+### Simple Connected Components Algorithm
+
+```
+function identify_communities(graph):
+  all_nodes = get_all_nodes(graph)
+  visited = set()
+  communities = []
+
+  function dfs(node, community):
+    visited.add(node)
+    community.add(node)
+
+    // Follow outgoing edges
+    for neighbor in graph[node]:
+      if neighbor not in visited:
+        dfs(neighbor, community)
+
+    // Follow incoming edges
+    for source, targets in graph:
+      if node in targets AND source not in visited:
+        dfs(source, community)
+
+  for node in all_nodes:
+    if node not in visited:
+      community = set()
+      dfs(node, community)
+      communities.append(community)
+
+  return communities
+```
+
+**Purpose:**
+
+- Identify disconnected parts of graph
+- Used for LLM-based cross-community inference
+- Community size affects visualization (node colors)
+
+---
+
+## 8. Deduplication
+
+```
+function deduplicate_triples(triples):
+  unique = {}
+
+  for triple in triples:
+    key = (triple.subject, triple.predicate, triple.object)
+
+    // Prefer original (extracted) over inferred
+    if key not in unique OR not triple.inferred:
+      unique[key] = triple
+
+  return unique.values()
+```
+
+**Rules:**
+
+- Key: `(subject, predicate, object)` tuple
+- Extracted triples override inferred ones
+- Case-sensitive after normalization
+
+---
+
+## 9. Processing Pipeline Flow
+
+```
+Pipeline:
+  1. Load input text
+  2. Chunk text (200 words, 20 overlap)
+  3. FOR EACH chunk:
+       - Call LLM with extraction prompt
+       - Parse JSON response
+       - Validate triples (subject, predicate, object present)
+       - Limit predicate length
+       - Accumulate results
+  4. IF standardization enabled:
+       - Extract unique entities
+       - Group similar entities
+       - Apply standardization mapping to triples
+  5. IF inference enabled:
+       - Identify communities
+       - Apply transitive inference
+       - Apply lexical similarity inference
+       - Optional: LLM-based cross-community inference
+  6. Deduplicate triples
+  7. Filter self-references
+  8. Return final graph
+```
+
+**Phase Flags:**
+
+- Standardization: toggleable (OFF by default for MVP)
+- Inference: toggleable (minimal rules-based for MVP)
+- LLM-assisted standardization: OFF (expensive)
+- LLM-assisted inference: OFF (expensive)
+
+---
+
+## 10. Important Constants & Limits
+
+```
+DEFAULTS:
+  chunk_size: 200 words
+  chunk_overlap: 20 words
+  max_predicate_words: 3
+  max_input_chars: 50000
+  temperature: 0.2
+  max_tokens: 8192
+
+PERFORMANCE CAPS:
+  soft_cap_nodes: 300 (warn user)
+  hard_cap_nodes: 500 (stop processing)
+  max_inferred_ratio: 1.5 (inferred <= 1.5 × extracted)
+
+LLM SETTINGS:
+  model: "gpt-4o-mini" (fast, cheap)
+  temperature: 0.2 (deterministic)
+  response_format: JSON mode / structured output
+```
+
+---
+
+## 11. Error Handling Patterns
+
+### Validation
+
+```
+function validate_triple(triple):
+  required_fields = ["subject", "predicate", "object"]
+
+  if not is_dict(triple):
+    return false
+
+  for field in required_fields:
+    if field not in triple OR is_empty(triple[field]):
+      return false
+
+  // Check for self-reference
+  if triple.subject == triple.object:
+    return false
+
+  return true
+```
+
+### LLM Response Handling
+
+```
+function process_llm_response(response):
+  try:
+    json = extract_json_from_text(response)
+
+    if json is null:
+      log_error("Could not extract JSON from LLM response")
+      return []
+
+    valid_triples = filter(json, validate_triple)
+    invalid_count = len(json) - len(valid_triples)
+
+    if invalid_count > 0:
+      log_warning(f"Filtered {invalid_count} invalid triples")
+
+    return valid_triples
+
+  catch error:
+    log_error("LLM processing failed: " + error)
+    return []
+```
+
+**Key Points:**
+
+- Always validate triple structure
+- Filter invalid triples, don't fail entire batch
+- Log warnings for partial failures
+- Return empty array on total failure (continue pipeline)
+
+---
+
+## 12. Implementation Notes for TypeScript
+
+### Async Iteration for Streaming
+
+```typescript
+async function* buildGraphFromText(text: string): AsyncGenerator<StreamEvent> {
+  const chunks = chunkText(text, 200, 20);
+
+  for (let i = 0; i < chunks.length; i++) {
+    yield {
+      type: "status",
+      message: `Processing chunk ${i + 1}/${chunks.length}`,
+    };
+
+    const triples = await extractTriplesFromChunk(chunks[i]);
+
+    for (const triple of triples) {
+      const nodeSubj = {
+        id: generateNodeId(triple.subject),
+        label: triple.subject,
+      };
+      const nodeObj = {
+        id: generateNodeId(triple.object),
+        label: triple.object,
+      };
+
+      yield { type: "node", node: nodeSubj };
+      yield { type: "node", node: nodeObj };
+      yield {
+        type: "edge",
+        edge: {
+          source: nodeSubj.id,
+          target: nodeObj.id,
+          relation: triple.predicate,
+          type: "extracted",
+        },
+      };
+    }
+  }
+
+  yield { type: "complete", summary: { nodes: X, edges: Y } };
+}
+```
+
+### OpenAI Structured Output
+
+```typescript
+import OpenAI from "openai";
+
+const completion = await openai.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages: [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: USER_PROMPT },
+  ],
+  response_format: { type: "json_object" }, // Force JSON
+  temperature: 0.2,
+  max_tokens: 8192,
+});
+
+const json = JSON.parse(completion.choices[0].message.content);
+```
+
+---
+
+## Summary: Critical Success Factors
+
+1. **Predicate Length Limit (3 words max)** - Enforce strictly
+2. **Robust JSON Parsing** - Handle malformed LLM responses
+3. **Entity Normalization** - Lowercase + remove stopwords
+4. **Validation at Every Step** - Filter invalid triples early
+5. **Chunk Overlap** - Preserve context between chunks
+6. **Deduplication** - Prefer extracted over inferred
+7. **Performance Caps** - Stop at 500 nodes for smooth rendering
+8. **Error Recovery** - Log and continue, don't fail pipeline
+9. **Streaming Events** - Emit nodes/edges as they're discovered
+10. **Type Safety** - Validate triple structure before processing
+
+---
+
+**End of Reference Document**

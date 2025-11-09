@@ -1,0 +1,370 @@
+---
+alwaysApply: true
+---
+
+# Cognify – MVP Specification
+
+## 1. Goal
+
+Generate interactive knowledge graphs from short topics or uploaded text inside our Next.js stack, visualized with `react-force-graph`, streamed in real time as nodes/edges arrive from the backend. One-day hackathon MVP.
+
+Judge story: user logs in → enters "Biology" (or uploads `.md`/`.txt`) → sees graph grow live → can revisit graphs in "My Graphs".
+
+## 2. Core User Flows
+
+**Topic flow:**
+
+1. User enters a topic (e.g., "Biology").
+2. Server generates a short source text via OpenAI, stores it.
+3. Stream live graph construction via SSE into the canvas.
+
+**Upload flow:**
+
+1. User uploads `.txt`/`.md` (≤ ~50k chars).
+2. Server stores input, then streams graph building via SSE.
+
+Both flows persist a `graph` record and allow returning later via "My Graphs".
+
+## 3. Product Scope (MVP)
+
+- Auth: required (Better Auth Google).
+- Create graph from topic or upload.
+- Live graph build: nodes/edges stream into `react-force-graph-2d`.
+- "My Graphs" sidebar: list recent graphs, open detail view.
+- Basic controls: search node, toggle labels, filter by edge type (extracted vs inferred), reset view.
+- Dark/light theme via system toggle.
+- Node hover: show popover (empty initially for MVP; extendable for descriptions, navigation hints, etc.).
+
+## 4. Architecture Overview
+
+- **Frontend**: Next.js (app router), React 19, `react-force-graph-2d`, UI from `src/components/ui` (buttons, inputs, dialog, sheet, form).
+- **Backend**:
+  - REST for streaming: `GET /api/graphs/stream?graphId=...` via SSE (`EventSource` on client).
+  - REST for create: `POST /api/graphs/create` with `topic | inputText`.
+  - tRPC optional for non-stream CRUD (list graphs, fetch a graph).
+- **LLM**: OpenAI SDK with structured output (JSON mode, low temp, short chunks).
+
+## 5. Data Model (Drizzle)
+
+### Table `graphs`
+
+- `id`: text (uuid)
+- `userId`: text → `user.id`
+- `name`: text (display name)
+- `sourceType`: enum('topic','upload')
+- `inputMeta`: jsonb (e.g., topic string or file metadata)
+- `inputText`: text (stored source)
+- `status`: enum('pending','building','complete','error')
+- `graphJson`: jsonb (final consolidated graph snapshot)
+- `createdAt` / `updatedAt`: timestamp
+- Indexes: `userId`, `createdAt`
+
+**Node identity**: `nodeId = hash(lowercase(normalizedLabel))` using SHA256 truncated to 16 chars. We also store `label` on each node object.
+
+## 6. Graph Data Contract
+
+### Node
+
+```json
+{
+  "id": "hash-id",
+  "label": "Cell division",
+  "description": null,
+  "group": "extracted",
+  "weight": 1
+}
+```
+
+### Edge
+
+```json
+{
+  "source": "hash-id-A",
+  "target": "hash-id-B",
+  "relation": "enables",
+  "type": "extracted",
+  "confidence": 0.7
+}
+```
+
+**Provenance**: `type` ∈ {"extracted","inferred"}.
+
+## 7. Streaming Protocol (SSE)
+
+**Endpoint**: `GET /api/graphs/stream?graphId=...`
+
+**Headers**:
+
+- `Content-Type: text/event-stream`
+- `Cache-Control: no-cache`
+- `Connection: keep-alive`
+
+**Event types and payloads**:
+
+- `status`:
+
+```json
+{ "message": "Extracting triples (chunk 2/8)..." }
+```
+
+- `node`:
+
+```json
+{
+  "node": { "id": "...", "label": "Mitosis", "group": "extracted", "weight": 1 }
+}
+```
+
+- `edge`:
+
+```json
+{
+  "edge": {
+    "source": "...",
+    "target": "...",
+    "relation": "part_of",
+    "type": "extracted"
+  }
+}
+```
+
+- `batch` (optional for performance):
+
+```json
+{ "nodes": [...], "edges": [...] }
+```
+
+- `complete`:
+
+```json
+{ "summary": { "nodes": 241, "edges": 564 } }
+```
+
+- `error`:
+
+```json
+{ "message": "LLM rate limited" }
+```
+
+**Client**: `EventSource` subscribes and applies mutations. We debounce drawing if needed.
+
+## 8. API Surface (MVP)
+
+- **POST /api/graphs/create**
+  - Body: `{ topic?: string, inputText?: string, name?: string }`
+  - Behavior: creates a `graphs` record with status `pending`, resolves/generates source text if `topic` provided, persists `inputText`, returns `{ graphId }`.
+  - Auth: required (session from Better Auth).
+
+- **GET /api/graphs/stream?graphId=...**
+  - Behavior: starts building graph (status → `building`), streams events; on finish, saves consolidated `graphJson`, sets status `complete`.
+  - Auth: required; verify user owns graph.
+
+- **GET /api/graphs/:id** (optional non-stream fetch)
+  - Returns final `graphJson` and metadata.
+  - Auth: required; verify user owns graph.
+
+- **GET /api/graphs** (list user graphs, newest first)
+  - Auth: required.
+
+## 9. Graph Generation Pipeline (TypeScript)
+
+**1) Chunking**:
+
+- Word-based chunks ~200 words, overlap 20.
+- Limit total input to ~50k chars (front-end guard + server validation).
+
+**2) Triple extraction (LLM)**:
+
+- Prompt: "Extract Subject–Predicate–Object triples from this text. Return JSON following schema ..."
+- Use OpenAI structured output (JSON mode) to enforce structure.
+- Output shape: `{ "triples": [ { "subject": "...", "predicate": "...", "object": "..." } ] }`
+- Stream per chunk: for each triple, emit `node`/`edge` events.
+
+**3) Standardization** (toggleable, **OFF by default**):
+
+- Normalize entity strings (case fold, trim, remove punctuation).
+- Optional: mini-LLM pass over unique entities to merge aliases (strict bounds).
+- For MVP: use simple normalization only (no LLM pass).
+- Emit `status` updates.
+
+**4) Relationship inference** (toggleable, minimal):
+
+- Transitive rule limited depth-1: if A→B and B→C with same `predicate`, propose A→C as `inferred`.
+- Skip if extracted A→C already exists (deduplication).
+- Cap inferred edges to a safe limit (e.g., 1.5× extracted).
+- Emit `edge` events with `type: "inferred"`.
+
+**5) Consolidation and save**:
+
+- Deduplicate nodes by `nodeId` and edges by `(source,target,relation,type)`.
+- Save final `graphJson` with arrays `{ nodes, edges }`.
+- Emit `complete`.
+
+**Performance guardrails**:
+
+- **Soft cap**: 300 nodes (show warning in UI).
+- **Hard cap**: 500 nodes (stop extraction, save partial graph).
+- Reason: smooth real-time rendering on standard hardware for demo.
+- If exceeded, emit `status` warning and stop processing additional chunks.
+
+## 10. LLM Integration Details
+
+### Topic → Source Generation
+
+When `topic` is provided (no `inputText`), generate educational text:
+
+- **Model**: `gpt-4o-mini` (fast, cheap)
+- **Prompt**:
+  ```
+  Generate a comprehensive 800-word educational text about {topic}, suitable for knowledge graph extraction. Include key concepts, relationships, and context. Write in clear, factual prose.
+  ```
+- **Store**: result in `inputText` field
+- **Then**: proceed with chunking and extraction
+
+### Triple Extraction Prompt (system)
+
+```
+You are an advanced AI system specialized in knowledge extraction and knowledge graph generation.
+Your expertise includes identifying consistent entity references and meaningful relationships in text.
+CRITICAL INSTRUCTION: All relationships (predicates) MUST be no more than 3 words maximum. Ideally 1-2 words. This is a hard limit.
+```
+
+### JSON Schema (for structured output)
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "triples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "subject": { "type": "string" },
+          "predicate": { "type": "string" },
+          "object": { "type": "string" }
+        },
+        "required": ["subject", "predicate", "object"]
+      }
+    }
+  },
+  "required": ["triples"]
+}
+```
+
+## 11. UI/UX
+
+### Pages
+
+- `/` (home): create form (topic input or file upload), recent graphs list.
+- `/graphs/[id]`: full-screen canvas with `react-force-graph-2d`, control bar, SSE connect/disconnect indicator.
+- `/login` already exists.
+
+### Controls
+
+Reuse `src/components/ui`:
+
+- Create form: `form`, `input`, `textarea`, `button`.
+- Sidebar "My Graphs": `sidebar` or `sheet`, list items, buttons.
+- Graph toolbar: show/hide labels, filter extracted/inferred, search node (input with highlight), reset view.
+- Theme toggle via `switch`.
+
+### Node interactions
+
+- **Hover**: show popover with node label + degree count + "View connections" button (empty implementation in MVP; wire event only).
+- **Click**: center/focus node in viewport.
+
+### Graph Naming
+
+- Topic flow: use topic as name (e.g., "Biology")
+- Upload flow: use filename without extension (e.g., "notes.txt" → "notes")
+- Fallback: "Graph {timestamp}"
+
+### Search Node UX
+
+- Simple text input above canvas
+- Filter/highlight matching nodes by label (case-insensitive)
+- Zoom to first match on Enter
+
+## 12. Technical Implementation Details
+
+### Environment Variables (add to `src/env.js`)
+
+```typescript
+server: {
+  OPENAI_API_KEY: z.string(),
+  BETTER_AUTH_SECRET: process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
+  BETTER_AUTH_GOOGLE_CLIENT_ID: z.string(),
+  BETTER_AUTH_GOOGLE_CLIENT_SECRET: z.string(),
+  DATABASE_URL: z.string().url(),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+},
+runtimeEnv: {
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  // ... existing vars
+}
+```
+
+### Dependencies to Add
+
+```bash
+pnpm add react-force-graph-2d openai
+pnpm add -D @types/react-force-graph-2d
+```
+
+### Node ID Generation
+
+```typescript
+import crypto from "crypto";
+
+function generateNodeId(label: string): string {
+  const normalized = label.toLowerCase().trim();
+  return crypto
+    .createHash("sha256")
+    .update(normalized)
+    .digest("hex")
+    .slice(0, 16);
+}
+```
+
+### Error Recovery
+
+- If SSE stream fails mid-build: set graph status to `error`
+- UI shows "Retry" button → re-trigger `/api/graphs/stream?graphId=...`
+- Server checks if partial `graphJson` exists → resume or restart from beginning
+
+### Concurrency Control
+
+- Limit: **1 active build per user**
+- Before creating new graph, check for existing `status='building'` graphs for user
+- If found, return error: `{ error: "Please wait for current graph to complete" }`
+
+## 13. Security & Limits
+
+- Auth required for create/list/stream.
+- Verify user owns graph in all endpoints.
+- Server validates size (≤ 50k chars), rate-limits requests per user.
+- Environment via `src/env.js` (see section 12).
+- Observability: log phase timings and token usage (simple `console` for hackathon).
+
+## 14. Implementation Order (Time-Boxed)
+
+See `roadmap.md` for detailed phases.
+
+1. Dependencies and environment setup
+2. DB schema and migration
+3. API routes (create + stream stubs)
+4. Client UI (form + canvas + EventSource)
+5. Pipeline (chunking + LLM + streaming logic)
+6. Integration and polish
+
+**Stretch**:
+
+- Inference pass
+- Node popover with description/navigation
+
+## 15. Feasibility Notes
+
+- **Real-time streaming**: YES — use SSE (`EventSource`). For topics and short texts this is immediate. For larger uploads we use `POST /api/graphs/create` then `GET /api/graphs/stream?graphId=...` — this is acceptable and recommended.
+- **Node popover on hover**: feasible with `popover` component. Empty in MVP; populate later with LLM-generated descriptions or navigation hints.
+- **Performance**: 500 node cap ensures smooth demo on standard hardware. react-force-graph-2d handles this well with default force simulation settings.

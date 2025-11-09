@@ -1,0 +1,14 @@
+---
+alwaysApply: true
+---
+
+Try to build the interface using the pre-existing components, they are within ./src/components/ui
+
+accordion.tsx breadcrumb.tsx chart.tsx drawer.tsx input-group.tsx menubar.tsx resizable.tsx skeleton.tsx tabs.tsx
+alert-dialog.tsx button-group.tsx checkbox.tsx dropdown-menu.tsx input-otp.tsx navigation-menu.tsx scroll-area.tsx slider.tsx textarea.tsx
+alert.tsx button.tsx collapsible.tsx empty.tsx input.tsx pagination.tsx select.tsx sonner.tsx toggle-group.tsx
+aspect-ratio.tsx calendar.tsx command.tsx field.tsx item.tsx popover.tsx separator.tsx spinner.tsx toggle.tsx
+avatar.tsx card.tsx context-menu.tsx form.tsx kbd.tsx progress.tsx sheet.tsx switch.tsx tooltip.tsx
+badge.tsx carousel.tsx dialog.tsx hover-card.tsx label.tsx radio-group.tsx sidebar.tsx table.tsx
+
+Obviously when custom solutions are needed, do so.

@@ -1,0 +1,25 @@
+---
+alwaysApply: true
+---
+
+# Code Quality & Engineering Standards
+
+## Core Principles
+
+Even under time pressure, maintain engineering quality:
+
+1. **Think Before Coding**: Understand the problem, consider edge cases, choose appropriate patterns
+2. **DRY & Reusability**: Extract repeated logic into utils/hooks, avoid copy-paste
+3. **Type Safety**: Use proper TypeScript types, avoid `any`, leverage inference
+4. **Error Handling**: Always handle errors gracefully (try-catch, error boundaries, fallbacks)
+5. **Validation**: Validate inputs at boundaries (API routes, forms, env vars)
+6. **Clean Code**: Meaningful names, small focused functions, clear separation of concerns
+
+## Patterns to Follow
+
+- **Server**: tRPC procedures for CRUD, separate route handlers for streaming
+- **Client**: Custom hooks for state/side-effects, UI components stay presentational
+- **Database**: Use transactions for multi-step operations, proper indexes
+- **Utils**: Pure functions, well-tested, single responsibility
+
+Don't blindly implement specs—apply judgment, suggest improvements, flag issues.

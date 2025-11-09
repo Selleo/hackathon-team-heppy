@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+It's a T3 stack repo, basically.
+
+The reference/ai-knowledge-graph is another repo, which i cloned over, for you to later on reference when developing similar features. It's written in python though.

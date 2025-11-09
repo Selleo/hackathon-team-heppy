@@ -1,0 +1,78 @@
+# Implementation Roadmap Rule
+
+## Context
+
+This project follows a phased implementation approach defined in `roadmap.md` at the repo root. Each phase must be completed, tested, and validated before moving to the next.
+
+## Core Principles
+
+1. **Incremental Development**: Build in small, testable phases. Never write 2k+ lines before validating core functionality works.
+2. **Human-in-Loop**: Pause for user validation at phase boundaries, especially for secrets, database migrations, or architectural decisions.
+3. **Test Before Proceeding**: Each phase should be runnable/testable independently. Validate success before next phase.
+4. **Mark Progress**: Update `roadmap.md` by changing phase status from `[ ]` to `[x]` when complete. Add notes under `## Phase Notes` section if needed.
+
+## Phase Workflow
+
+For each phase in `roadmap.md`:
+
+1. Read phase requirements
+2. Implement minimal viable code for that phase only
+3. Test/validate (provide test commands or validation steps)
+4. Mark phase complete in `roadmap.md`
+5. Add implementation notes if relevant
+6. Wait for user approval before next phase
+
+## Phase Validation
+
+- Phase 0-1: Run `pnpm install`, check `pnpm check`, validate env vars
+- Phase 2: Run `pnpm db:push`, verify tables in database
+- Phase 3: Test API endpoints with curl/Postman
+- Phase 4: Run dev server, test UI rendering
+- Phase 5: End-to-end test (create graph, observe stream)
+
+## When to Pause
+
+- Before running database migrations
+- Before adding secrets to `.env` (prompt user to add them)
+- After completing each phase (let user validate)
+- If a phase fails validation (debug before proceeding)
+- When architectural decisions arise not in spec
+
+## Respect Existing Patterns
+
+- Use Better Auth for authentication (already configured)
+- Use Drizzle ORM for database (follow existing schema patterns in `src/server/db/schema.ts`)
+- Use tRPC for non-streaming APIs (follow existing patterns in `src/server/api/`)
+- Use Next.js App Router patterns (no Pages router)
+- Use existing UI components from `src/components/ui/`
+
+## Progress Tracking
+
+Update `roadmap.md` status:
+
+- `[ ]` = Not started
+- `[~]` = In progress
+- `[x]` = Complete
+- `[!]` = Blocked/needs attention
+
+Add notes in `## Phase Notes` section:
+
+```markdown
+## Phase Notes
+
+### Phase 3 (2025-11-09)
+
+- Created `/api/graphs/create` and `/api/graphs/stream` routes
+- SSE streaming working with EventSource on client
+- Note: Hard-coded test data for now, LLM integration in Phase 5
+```
+
+## Success Criteria
+
+The roadmap is complete when:
+
+- All phases marked `[x]`
+- User can create graph from topic
+- Graph streams in real-time to canvas
+- Graphs persist and load from "My Graphs"
+- No critical bugs blocking demo
