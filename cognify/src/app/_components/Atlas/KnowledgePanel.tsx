@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronRight, ChevronDown, Folder, FolderOpen } from "lucide-react";
+import { Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/trpc/react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { StatusLegenedCard } from './StatusLegenedCard';
+import { CategoryNode } from './CategoryNode';
+import type { KnowledgeItem } from '@/types/atlas';
 
 const statusColors = {
   Mastered: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
@@ -17,21 +18,6 @@ const statusColors = {
   Latent: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20",
 };
 
-const statusIcons = {
-  Mastered: "🟢",
-  Learning: "🟡",
-  "Identified Gap": "🔴",
-  Latent: "⚪",
-};
-
-type KnowledgeItem = {
-  id: string;
-  title: string;
-  description: string | null;
-  status: "Latent" | "Identified Gap" | "Learning" | "Mastered";
-  categoryPath: string | null;
-  updatedAt: Date;
-};
 
 // Build hierarchical tree structure from flat list
 function buildCategoryTree(items: KnowledgeItem[]) {
@@ -62,66 +48,6 @@ function buildCategoryTree(items: KnowledgeItem[]) {
   return tree;
 }
 
-// Recursive category node component
-function CategoryNode({ 
-  name, 
-  data, 
-  level = 0 
-}: { 
-  name: string; 
-  data: any; 
-  level?: number;
-}) {
-  const [isOpen, setIsOpen] = useState(level === 0); // Top level open by default
-  const hasChildren = Object.keys(data.children).length > 0;
-  const itemCount = data.items.length;
-  
-  return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="space-y-1">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50">
-          {hasChildren ? (
-            isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />
-          ) : (
-            <div className="w-4" />
-          )}
-          {isOpen ? <FolderOpen className="h-4 w-4 shrink-0 text-primary" /> : <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />}
-          <span className="flex-1 truncate font-medium text-left">{name}</span>
-          <Badge variant="secondary" className="h-5 text-xs">
-            {itemCount + Object.values(data.children).reduce((acc: number, child: any) => {
-              return acc + child.items.length + Object.values(child.children).reduce((a: number, c: any) => a + c.items.length, 0);
-            }, 0)}
-          </Badge>
-        </CollapsibleTrigger>
-        
-        <CollapsibleContent>
-          <div className="ml-4 space-y-1 border-l pl-2">
-            {/* Direct items in this category */}
-            {data.items.map((item: KnowledgeItem) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
-              >
-                <span className="shrink-0 text-base">{statusIcons[item.status]}</span>
-                <span className="flex-1 truncate">{item.title}</span>
-              </div>
-            ))}
-            
-            {/* Subcategories */}
-            {Object.entries(data.children).map(([childName, childData]) => (
-              <CategoryNode
-                key={childName}
-                name={childName}
-                data={childData}
-                level={level + 1}
-              />
-            ))}
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
-  );
-}
 
 export function KnowledgePanel() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -195,6 +121,8 @@ export function KnowledgePanel() {
               )}
             </CardContent>
           </Card>
+
+          <StatusLegenedCard />
         </div>
       </ScrollArea>
     </div>

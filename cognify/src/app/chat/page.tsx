@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Trash2, MessageSquare } from "lucide-react";
 import { MessageList } from "@/app/_components/message-list";
 import { MessageInput } from "@/app/_components/message-input";
-import { KnowledgePanel } from "@/app/_components/knowledge-panel";
+import { KnowledgePanel } from "@/app/_components/Atlas/KnowledgePanel";
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
 import { Spinner } from "@/components/ui/spinner";
