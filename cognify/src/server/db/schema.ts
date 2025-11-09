@@ -148,6 +148,46 @@ export const graphs = createTable(
   ],
 );
 
-export const graphRelations = relations(graphs, ({ one }) => ({
+export const graphRelations = relations(graphs, ({ one, many }) => ({
   user: one(user, { fields: [graphs.userId], references: [user.id] }),
+  nodeDetails: many(nodeDetails),
+}));
+
+// Node details table for AI-generated node explanations
+export const nodeDetails = createTable(
+  "node_detail",
+  (d) => ({
+    id: d
+      .text()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    graphId: d
+      .text("graph_id")
+      .notNull()
+      .references(() => graphs.id, { onDelete: "cascade" }),
+    nodeId: d.text("node_id").notNull(), // The hash ID from the graph
+    nodeLabel: d.text("node_label").notNull(), // Human-readable label
+    content: d.text().notNull(), // AI-generated detailed content
+    relationships: d.jsonb(), // Snapshot of node's edges for context
+    createdAt: d
+      .timestamp("created_at", { withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: d
+      .timestamp("updated_at", { withTimezone: true })
+      .$onUpdate(() => new Date()),
+  }),
+  (t) => [
+    index("node_detail_graph_id_idx").on(t.graphId),
+    index("node_detail_node_id_idx").on(t.nodeId),
+    // Unique constraint: one detail per node per graph
+    index("node_detail_unique_idx").on(t.graphId, t.nodeId),
+  ],
+);
+
+export const nodeDetailRelations = relations(nodeDetails, ({ one }) => ({
+  graph: one(graphs, {
+    fields: [nodeDetails.graphId],
+    references: [graphs.id],
+  }),
 }));

@@ -21,6 +21,8 @@ import {
   type GraphNode,
 } from "@/hooks/useGraphStream";
 import type { ForceGraphMethods } from "react-force-graph-2d";
+import { useNodeSelection } from "@/hooks/useNodeSelection";
+import { NodeDetailsSheet } from "./node-details-sheet";
 
 // Dynamically import ForceGraph2D with no SSR
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
@@ -68,6 +70,17 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
 
   const { nodes, edges, status, statusMessage, error, summary } =
     useGraphStream(graphId);
+
+  // Node selection hook
+  const {
+    selectedNodeId,
+    selectedNodeLabel,
+    sheetOpen,
+    setSheetOpen,
+    selectNode,
+    navigateToRelatedNode,
+    hasRelatedNodes,
+  } = useNodeSelection(nodes, edges);
 
   // Simplified force calculation with sensible defaults
   const forceStrength = React.useMemo(() => {
@@ -187,13 +200,22 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
     }
   };
 
-  const handleNodeClick = useCallback((node: any) => {
-    // Center the clicked node
-    if (graphRef.current?.centerAt) {
-      graphRef.current.centerAt(node.x, node.y, 1000);
-      graphRef.current.zoom(4, 1000);
-    }
-  }, []);
+  const handleNodeClick = useCallback(
+    (node: any) => {
+      // Skip root node
+      if (node.isRoot) return;
+
+      // Set selected node and open sheet
+      selectNode(node.id as string, node.name as string);
+
+      // Center the clicked node
+      if (graphRef.current?.centerAt) {
+        graphRef.current.centerAt(node.x, node.y, 1000);
+        graphRef.current.zoom(4, 1000);
+      }
+    },
+    [selectNode],
+  );
 
   const getStatusColor = () => {
     switch (status) {
@@ -215,9 +237,10 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
       const label = nodeData.name as string;
       const isHovered = hoveredNodeRef.current === nodeData.id;
       const isRoot = nodeData.isRoot === true;
+      const isSelected = selectedNodeId === nodeData.id;
       
       // Always show labels for root node, otherwise check conditions
-      const shouldShowLabel = showLabels || isHovered || globalScale >= 2.5;
+      const shouldShowLabel = showLabels || isHovered || isSelected || globalScale >= 2.5;
       
       if (shouldShowLabel) {
         // Simplified font sizing
@@ -231,6 +254,8 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
         // Root node gets special styling
         if (isRoot) {
           ctx.fillStyle = "rgba(0, 0, 0, 1)";
+        } else if (isSelected) {
+          ctx.fillStyle = "rgba(59, 130, 246, 1)"; // Blue for selected
         } else {
           ctx.fillStyle = isHovered ? "rgba(0, 0, 0, 0.9)" : "rgba(0, 0, 0, 0.7)";
         }
@@ -243,7 +268,7 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
         }
       }
     },
-    [showLabels],
+    [showLabels, selectedNodeId],
   );
 
   const nodePointerAreaPaintCallback = useCallback(
@@ -401,13 +426,22 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
         ) : (
           <div className="h-full w-full">
             <ForceGraph2D
-              // @ts-expect-error - ForceGraph2D is not typed
+              // @ts-expect-error - ForceGraph2D ref type mismatch
               ref={graphRef}
               graphData={graphData}
               width={dimensions.width}
               height={dimensions.height}
               nodeLabel="name"
-              nodeAutoColorBy="group"
+              nodeColor={(node: any) => {
+                if (node.id === selectedNodeId) {
+                  return "#3b82f6"; // Blue for selected
+                }
+                if (node.group === "root") {
+                  return "#6366f1"; // Indigo for root
+                }
+                // Return default color based on group
+                return node.color ?? "#64748b"; // Default gray
+              }}
               nodeRelSize={1}
               onNodeClick={handleNodeClick}
               nodeCanvasObjectMode={() => "after"}
@@ -456,6 +490,21 @@ export function GraphViewer({ graphId, graphIcon, graphName }: GraphViewerProps)
           </div>
         </div>
       )}
+
+      {/* Node Details Sheet */}
+      <NodeDetailsSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        graphId={graphId}
+        graphName={graphName}
+        selectedNodeId={selectedNodeId}
+        selectedNodeLabel={selectedNodeLabel}
+        nodes={nodes}
+        onNavigateToNode={selectNode}
+        onNavigatePrev={() => navigateToRelatedNode("prev")}
+        onNavigateNext={() => navigateToRelatedNode("next")}
+        hasRelatedNodes={hasRelatedNodes}
+      />
     </div>
   );
 }

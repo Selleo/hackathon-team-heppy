@@ -95,3 +95,71 @@ export const TRIPLE_EXTRACTION_JSON_SCHEMA = {
   required: ["triples"],
   additionalProperties: false,
 } as const;
+
+/**
+ * System prompt for generating detailed node explanations.
+ * Takes a node and its context within the knowledge graph.
+ */
+export const NODE_DETAIL_SYSTEM_PROMPT = `You are an expert educator and knowledge synthesizer. Your task is to explain concepts in the context of a knowledge graph, helping users understand how different ideas relate to each other.
+
+Your explanations should:
+- Be clear, engaging, and educational
+- Explain the concept in 4-6 paragraphs (~300 words)
+- Reference related concepts from the graph naturally
+- Show how this concept fits into the broader topic
+- Use accessible language while maintaining accuracy`;
+
+/**
+ * User prompt for generating detailed content about a specific node.
+ * @param nodeLabel - The label of the node to explain
+ * @param rootTopic - The main topic of the knowledge graph
+ * @param allNodes - All nodes in the graph for context
+ * @param incomingEdges - Edges pointing to this node
+ * @param outgoingEdges - Edges from this node to others
+ */
+export function getNodeDetailPrompt(
+  nodeLabel: string,
+  rootTopic: string,
+  allNodes: string[],
+  incomingEdges: Array<{ source: string; relation: string }>,
+  outgoingEdges: Array<{ relation: string; target: string }>,
+): string {
+  const incomingText =
+    incomingEdges.length > 0
+      ? incomingEdges
+          .map((e) => `- "${e.source}" ${e.relation} "${nodeLabel}"`)
+          .join("\n")
+      : "None";
+
+  const outgoingText =
+    outgoingEdges.length > 0
+      ? outgoingEdges
+          .map((e) => `- "${nodeLabel}" ${e.relation} "${e.target}"`)
+          .join("\n")
+      : "None";
+
+  const otherNodes = allNodes.filter((n) => n !== nodeLabel).slice(0, 20); // Limit to 20 for context
+
+  return `Generate a detailed, educational explanation about "${nodeLabel}" in the context of ${rootTopic}.
+
+CONTEXT:
+- Main Topic: ${rootTopic}
+- Current Concept: ${nodeLabel}
+- Other concepts in this knowledge graph: ${otherNodes.join(", ")}
+
+RELATIONSHIPS:
+Incoming connections (what relates to this concept):
+${incomingText}
+
+Outgoing connections (what this concept relates to):
+${outgoingText}
+
+TASK:
+Write a 4-6 paragraph explanation (~300 words) that:
+1. Defines and explains "${nodeLabel}"
+2. Shows how it connects to the main topic "${rootTopic}"
+3. References related concepts from the graph naturally (especially those directly connected)
+4. Helps the reader understand its significance and context
+
+Write in a clear, engaging style suitable for someone learning about ${rootTopic}. Focus on making connections between concepts explicit.`;
+}
